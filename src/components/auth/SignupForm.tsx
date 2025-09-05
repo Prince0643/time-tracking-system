@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Eye, EyeOff, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { SignupCredentials, UserRole } from '../../types'
+import { SignupCredentials } from '../../types'
 
 interface SignupFormProps {
   onSwitchToLogin: () => void

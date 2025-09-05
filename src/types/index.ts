@@ -1,58 +1,3 @@
-export interface Project {
-  id: string
-  name: string
-  color: string
-  client?: string
-  description?: string
-  isArchived: boolean
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface Task {
-  id: string
-  name: string
-  projectId: string
-  isBillable: boolean
-  hourlyRate?: number
-  isArchived: boolean
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface TimeEntry {
-  id: string
-  userId: string
-  description: string
-  projectId?: string
-  taskId?: string
-  startTime: Date
-  endTime?: Date
-  duration: number // in seconds
-  isBillable: boolean
-  tags: string[]
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface Client {
-  id: string
-  name: string
-  email?: string
-  phone?: string
-  address?: string
-  isArchived: boolean
-  createdAt: Date
-  updatedAt: Date
-}
-
-export interface Tag {
-  id: string
-  name: string
-  color: string
-  createdAt: Date
-}
-
 export type UserRole = 'employee' | 'admin'
 
 export interface User {
@@ -75,12 +20,6 @@ export interface AuthUser {
   name: string
 }
 
-export interface TimerState {
-  isRunning: boolean
-  startTime?: Date
-  currentEntry?: Partial<TimeEntry>
-}
-
 export interface LoginCredentials {
   email: string
   password: string
@@ -92,4 +31,378 @@ export interface SignupCredentials {
   password: string
   confirmPassword: string
   role: UserRole
+}
+
+// Project Management Types
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  color: string
+  status: 'active' | 'on-hold' | 'completed' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  startDate?: Date
+  endDate?: Date
+  budget?: number
+  clientId?: string
+  clientName?: string
+  isArchived: boolean
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Client {
+  id: string
+  name: string
+  email?: string
+  phone?: string
+  company?: string
+  address?: string
+  isArchived: boolean
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface CreateProjectData {
+  name: string
+  description?: string
+  color: string
+  status: 'active' | 'on-hold' | 'completed' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  startDate?: Date
+  endDate?: Date
+  budget?: number
+  clientId?: string
+}
+
+export interface CreateClientData {
+  name: string
+  email?: string
+  phone?: string
+  company?: string
+  address?: string
+}
+
+// Time Tracking Types
+export interface TimeEntry {
+  id: string
+  userId: string
+  projectId?: string
+  projectName?: string
+  description?: string
+  startTime: Date
+  endTime?: Date
+  duration: number // in seconds
+  isRunning: boolean
+  isBillable: boolean
+  tags?: string[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface CreateTimeEntryData {
+  projectId?: string
+  description?: string
+  isBillable?: boolean
+  tags?: string[]
+}
+
+export interface TimerState {
+  isRunning: boolean
+  startTime?: Date
+  currentEntry?: TimeEntry
+  elapsedTime: number // in seconds
+}
+
+export interface TimeStats {
+  daily: number // seconds
+  weekly: number // seconds
+  monthly: number // seconds
+  total: number // seconds
+}
+
+export interface TimeSummary {
+  today: {
+    total: number
+    billable: number
+    entries: number
+  }
+  thisWeek: {
+    total: number
+    billable: number
+    entries: number
+  }
+  thisMonth: {
+    total: number
+    billable: number
+    entries: number
+  }
+}
+
+// Reports and Analytics Types
+export interface TimeAnalytics {
+  totalTime: number
+  billableTime: number
+  nonBillableTime: number
+  totalEntries: number
+  averageSessionLength: number
+  mostProductiveDay: string
+  mostProductiveHour: number
+  totalEarnings: number
+}
+
+export interface ProjectAnalytics {
+  projectId: string
+  projectName: string
+  totalTime: number
+  billableTime: number
+  entries: number
+  percentage: number
+  color: string
+}
+
+export interface DailyAnalytics {
+  date: string
+  totalTime: number
+  billableTime: number
+  entries: number
+  projects: { [projectId: string]: number }
+}
+
+export interface WeeklyAnalytics {
+  week: string
+  totalTime: number
+  billableTime: number
+  entries: number
+  dailyBreakdown: DailyAnalytics[]
+}
+
+export interface MonthlyAnalytics {
+  month: string
+  totalTime: number
+  billableTime: number
+  entries: number
+  weeklyBreakdown: WeeklyAnalytics[]
+}
+
+export interface ReportFilters {
+  startDate: Date
+  endDate: Date
+  projectIds?: string[]
+  billableOnly?: boolean
+  userId?: string
+}
+
+export interface ChartData {
+  labels: string[]
+  datasets: {
+    label: string
+    data: number[]
+    backgroundColor?: string | string[]
+    borderColor?: string | string[]
+    borderWidth?: number
+  }[]
+}
+
+// Project Management Types
+export interface Task {
+  id: string
+  title: string
+  description?: string
+  projectId: string
+  projectName: string
+  status: TaskStatus
+  priority: TaskPriority
+  assigneeId?: string
+  assigneeName?: string
+  assigneeEmail?: string
+  dueDate?: Date
+  estimatedHours?: number
+  actualHours?: number
+  tags: string[]
+  isCompleted: boolean
+  completedAt?: Date
+  createdBy: string
+  createdByName: string
+  createdAt: Date
+  updatedAt: Date
+  parentTaskId?: string
+  subtasks?: Task[]
+  attachments: TaskAttachment[]
+  comments: TaskComment[]
+  timeEntries: string[] // Array of time entry IDs
+}
+
+export interface TaskStatus {
+  id: string
+  name: string
+  color: string
+  order: number
+  isCompleted: boolean
+}
+
+export interface TaskPriority {
+  id: string
+  name: string
+  color: string
+  level: number
+}
+
+export interface TaskAttachment {
+  id: string
+  name: string
+  url: string
+  type: string
+  size: number
+  uploadedBy: string
+  uploadedAt: Date
+}
+
+export interface TaskComment {
+  id: string
+  content: string
+  authorId: string
+  authorName: string
+  authorEmail: string
+  createdAt: Date
+  updatedAt: Date
+  mentions: string[] // Array of user IDs mentioned
+  parentCommentId?: string
+  replies?: TaskComment[]
+}
+
+export interface ProjectBoard {
+  id: string
+  name: string
+  description?: string
+  projectId: string
+  type: BoardType
+  columns: BoardColumn[]
+  settings: BoardSettings
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface BoardColumn {
+  id: string
+  name: string
+  color: string
+  order: number
+  taskStatusId: string
+  taskLimit?: number
+  isCollapsed: boolean
+}
+
+export interface BoardSettings {
+  showCompletedTasks: boolean
+  showAssignee: boolean
+  showDueDate: boolean
+  showPriority: boolean
+  showTags: boolean
+  showTimeTracking: boolean
+  allowDragDrop: boolean
+  groupBy?: 'assignee' | 'priority' | 'dueDate' | 'tags' | 'none'
+}
+
+export type BoardType = 'kanban' | 'list' | 'calendar' | 'gantt' | 'timeline'
+
+export interface CreateTaskData {
+  title: string
+  description?: string
+  projectId: string
+  status: string
+  priority: string
+  assigneeId?: string
+  dueDate?: Date
+  estimatedHours?: number
+  tags: string[]
+  parentTaskId?: string
+}
+
+export interface UpdateTaskData {
+  title?: string
+  description?: string
+  status?: string
+  priority?: string
+  assigneeId?: string
+  dueDate?: Date
+  estimatedHours?: number
+  actualHours?: number
+  tags?: string[]
+  isCompleted?: boolean
+  parentTaskId?: string
+}
+
+export interface CreateBoardData {
+  name: string
+  description?: string
+  projectId: string
+  type: BoardType
+  columns: Omit<BoardColumn, 'id'>[]
+  settings: BoardSettings
+}
+
+export interface UpdateBoardData {
+  name?: string
+  description?: string
+  type?: BoardType
+  columns?: BoardColumn[]
+  settings?: BoardSettings
+}
+
+export interface TaskFilter {
+  projectId?: string
+  status?: string[]
+  priority?: string[]
+  assigneeId?: string
+  tags?: string[]
+  dueDateFrom?: Date
+  dueDateTo?: Date
+  isCompleted?: boolean
+  search?: string
+}
+
+export interface ProjectStats {
+  totalTasks: number
+  completedTasks: number
+  inProgressTasks: number
+  overdueTasks: number
+  totalEstimatedHours: number
+  totalActualHours: number
+  completionRate: number
+  averageTaskDuration: number
+  teamMembers: number
+  activeBoards: number
+}
+
+export interface TeamMember {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'manager' | 'member' | 'viewer'
+  avatar?: string
+  isActive: boolean
+  joinedAt: Date
+  lastActiveAt?: Date
+  taskCount: number
+  completedTasks: number
+}
+
+export interface ProjectTemplate {
+  id: string
+  name: string
+  description: string
+  category: string
+  icon: string
+  color: string
+  defaultStatuses: Omit<TaskStatus, 'id'>[]
+  defaultPriorities: Omit<TaskPriority, 'id'>[]
+  defaultColumns: Omit<BoardColumn, 'id' | 'taskStatusId'>[]
+  isPublic: boolean
+  createdBy: string
+  createdAt: Date
+  usageCount: number
 }

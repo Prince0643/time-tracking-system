@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { 
   Clock, 
@@ -6,12 +5,9 @@ import {
   FolderOpen, 
   Settings, 
   X,
-  Plus,
-  ChevronDown,
-  ChevronRight,
-  Users
+  Users,
+  Kanban
 } from 'lucide-react'
-import { mockProjects } from '../data/mockData'
 import { useAuth } from '../contexts/AuthContext'
 
 interface SidebarProps {
@@ -22,12 +18,12 @@ interface SidebarProps {
 export default function Sidebar({ open, setOpen }: SidebarProps) {
   const location = useLocation()
   const { currentUser } = useAuth()
-  const [projectsExpanded, setProjectsExpanded] = useState(true)
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Clock },
     { name: 'Time Tracker', href: '/tracker', icon: Clock },
     { name: 'Projects', href: '/projects', icon: FolderOpen },
+    { name: 'Task Management', href: '/management', icon: Kanban },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     // Admin-only navigation items
     ...(currentUser?.role === 'admin' ? [
@@ -94,43 +90,12 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
             })}
           </nav>
 
-          {/* Projects Section */}
+          {/* Footer */}
           <div className="px-4 pb-6">
-            <div className="flex items-center justify-between mb-3">
-              <button
-                onClick={() => setProjectsExpanded(!projectsExpanded)}
-                className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                {projectsExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-                <span>Projects</span>
-              </button>
-              <button className="p-1 rounded-lg hover:bg-gray-100">
-                <Plus className="h-4 w-4 text-gray-600" />
-              </button>
+            <div className="text-xs text-gray-500 text-center">
+              <p>Clockistry v1.0</p>
+              <p>Rebuilt & Ready</p>
             </div>
-
-            {projectsExpanded && (
-              <div className="space-y-1">
-                {mockProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    to={`/projects/${project.id}`}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  >
-                    <div 
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: project.color }}
-                    />
-                    <span className="truncate">{project.name}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

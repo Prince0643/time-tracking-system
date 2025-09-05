@@ -1,139 +1,160 @@
 import React, { useState, useEffect } from 'react'
-import { X, Palette, User, FileText } from 'lucide-react'
-import { Project, Client } from '../../types'
+import { X, Calendar, DollarSign, AlertCircle } from 'lucide-react'
+import { Project, Client, CreateProjectData } from '../../types'
+import { projectService } from '../../services/projectService'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface ProjectModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   project?: Project | null
-  clients: Client[]
-  mode: 'create' | 'edit'
+  onSuccess: () => void
 }
 
 const PROJECT_COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444',
+  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
   '#06B6D4', '#84CC16', '#F97316', '#EC4899', '#6366F1'
 ]
 
-export default function ProjectModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  project, 
-  clients, 
-  mode 
-}: ProjectModalProps) {
-  const [formData, setFormData] = useState({
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active', color: 'text-green-600' },
+  { value: 'on-hold', label: 'On Hold', color: 'text-yellow-600' },
+  { value: 'completed', label: 'Completed', color: 'text-blue-600' },
+  { value: 'cancelled', label: 'Cancelled', color: 'text-red-600' }
+]
+
+const PRIORITY_OPTIONS = [
+  { value: 'low', label: 'Low', color: 'text-gray-600' },
+  { value: 'medium', label: 'Medium', color: 'text-yellow-600' },
+  { value: 'high', label: 'High', color: 'text-orange-600' },
+  { value: 'urgent', label: 'Urgent', color: 'text-red-600' }
+]
+
+export default function ProjectModal({ isOpen, onClose, project, onSuccess }: ProjectModalProps) {
+  const { currentUser } = useAuth()
+  const [formData, setFormData] = useState<CreateProjectData>({
     name: '',
     description: '',
-    color: '#3B82F6',
-    client: '',
-    isArchived: false
+    color: PROJECT_COLORS[0],
+    status: 'active',
+    priority: 'medium',
+    startDate: undefined,
+    endDate: undefined,
+    budget: undefined,
+    clientId: undefined
   })
+  const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [error, setError] = useState('')
+
+  const isEdit = !!project
 
   useEffect(() => {
-    if (project && mode === 'edit') {
-      setFormData({
-        name: project.name,
-        description: project.description || '',
-        color: project.color,
-        client: project.client || '',
-        isArchived: project.isArchived
-      })
-    } else {
-      setFormData({
-        name: '',
-        description: '',
-        color: '#3B82F6',
-        client: '',
-        isArchived: false
-      })
+    if (isOpen) {
+      loadClients()
+      if (project) {
+        setFormData({
+          name: project.name,
+          description: project.description || '',
+          color: project.color,
+          status: project.status,
+          priority: project.priority,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          budget: project.budget,
+          clientId: project.clientId
+        })
+      } else {
+        setFormData({
+          name: '',
+          description: '',
+          color: PROJECT_COLORS[0],
+          status: 'active',
+          priority: 'medium',
+          startDate: undefined,
+          endDate: undefined,
+          budget: undefined,
+          clientId: undefined
+        })
+      }
+      setError('')
     }
-    setErrors({})
-  }, [project, mode])
+  }, [isOpen, project])
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Project name is required'
+  const loadClients = async () => {
+    try {
+      const clientsData = await projectService.getClients()
+      setClients(clientsData)
+    } catch (error) {
+      console.error('Error loading clients:', error)
     }
-
-    if (formData.name.length > 100) {
-      newErrors.name = 'Project name must be less than 100 characters'
-    }
-
-    if (formData.description && formData.description.length > 500) {
-      newErrors.description = 'Description must be less than 500 characters'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!validateForm()) {
-      return
-    }
+    if (!currentUser) return
 
     setLoading(true)
+    setError('')
+
     try {
-      await onSave({
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        color: formData.color,
-        client: formData.client || undefined,
-        isArchived: formData.isArchived
-      })
+      if (isEdit) {
+        await projectService.updateProject(project.id, formData)
+      } else {
+        await projectService.createProject(formData, currentUser.uid)
+      }
+      onSuccess()
       onClose()
-    } catch (error) {
-      console.error('Error saving project:', error)
+    } catch (error: any) {
+      setError(error.message || 'Failed to save project')
     } finally {
       setLoading(false)
     }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'number' ? (value ? Number(value) : undefined) : value
     }))
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }))
-    }
+  }
+
+  const handleDateChange = (name: 'startDate' | 'endDate', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value ? new Date(value) : undefined
+    }))
   }
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {mode === 'create' ? 'Create New Project' : 'Edit Project'}
+            {isEdit ? 'Edit Project' : 'Create New Project'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Error Message */}
+          {error && (
+            <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Project Name */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -145,13 +166,11 @@ export default function ProjectModal({
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              className={`input ${errors.name ? 'border-red-500' : ''}`}
+              className="input"
               placeholder="Enter project name"
+              required
               disabled={loading}
             />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
           </div>
 
           {/* Description */}
@@ -164,98 +183,175 @@ export default function ProjectModal({
               name="description"
               value={formData.description}
               onChange={handleInputChange}
+              className="input"
               rows={3}
-              className={`input ${errors.description ? 'border-red-500' : ''}`}
-              placeholder="Enter project description (optional)"
+              placeholder="Enter project description"
               disabled={loading}
             />
-            {errors.description && (
-              <p className="mt-1 text-sm text-red-600">{errors.description}</p>
-            )}
           </div>
 
-          {/* Client Selection */}
-          <div>
-            <label htmlFor="client" className="block text-sm font-medium text-gray-700 mb-2">
-              Client
-            </label>
-            <div className="relative">
+          {/* Color and Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Color
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, color }))}
+                    className={`w-8 h-8 rounded-full border-2 ${
+                      formData.color === color ? 'border-gray-900' : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    disabled={loading}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
               <select
-                id="client"
-                name="client"
-                value={formData.client}
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="input"
+                disabled={loading}
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Priority and Client */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
+                Priority
+              </label>
+              <select
+                id="priority"
+                name="priority"
+                value={formData.priority}
+                onChange={handleInputChange}
+                className="input"
+                disabled={loading}
+              >
+                {PRIORITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="clientId" className="block text-sm font-medium text-gray-700 mb-2">
+                Client
+              </label>
+              <select
+                id="clientId"
+                name="clientId"
+                value={formData.clientId || ''}
                 onChange={handleInputChange}
                 className="input"
                 disabled={loading}
               >
                 <option value="">No client</option>
-                {clients.map(client => (
-                  <option key={client.id} value={client.name}>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
                 ))}
               </select>
-              <User className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
 
-          {/* Color Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Project Color
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {PROJECT_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, color }))}
-                  className={`w-10 h-10 rounded-full border-2 transition-all ${
-                    formData.color === color 
-                      ? 'border-gray-800 scale-110' 
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  style={{ backgroundColor: color }}
+          {/* Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-2">
+                Start Date
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  id="startDate"
+                  value={formData.startDate ? formData.startDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleDateChange('startDate', e.target.value)}
+                  className="input pl-10"
                   disabled={loading}
                 />
-              ))}
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-2">
+                End Date
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  id="endDate"
+                  value={formData.endDate ? formData.endDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleDateChange('endDate', e.target.value)}
+                  className="input pl-10"
+                  disabled={loading}
+                />
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
             </div>
           </div>
 
-          {/* Archive Toggle */}
-          {mode === 'edit' && (
-            <div className="flex items-center space-x-3">
+          {/* Budget */}
+          <div>
+            <label htmlFor="budget" className="block text-sm font-medium text-gray-700 mb-2">
+              Budget
+            </label>
+            <div className="relative">
               <input
-                type="checkbox"
-                id="isArchived"
-                name="isArchived"
-                checked={formData.isArchived}
-                onChange={(e) => setFormData(prev => ({ ...prev, isArchived: e.target.checked }))}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                type="number"
+                id="budget"
+                name="budget"
+                value={formData.budget || ''}
+                onChange={handleInputChange}
+                className="input pl-10"
+                placeholder="0.00"
+                step="0.01"
+                min="0"
                 disabled={loading}
               />
-              <label htmlFor="isArchived" className="text-sm font-medium text-gray-700">
-                Archive project
-              </label>
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
-          )}
+          </div>
 
           {/* Actions */}
-          <div className="flex space-x-3 pt-4">
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 btn-secondary"
+              className="btn-secondary"
               disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 btn-primary"
+              className="btn-primary"
               disabled={loading}
             >
-              {loading ? 'Saving...' : mode === 'create' ? 'Create Project' : 'Save Changes'}
+              {loading ? 'Saving...' : (isEdit ? 'Update Project' : 'Create Project')}
             </button>
           </div>
         </form>

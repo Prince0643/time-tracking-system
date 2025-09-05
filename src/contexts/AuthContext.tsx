@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { 
   User as FirebaseUser,
   signInWithEmailAndPassword,
@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth'
 import { ref, set, get } from 'firebase/database'
 import { auth, database } from '../config/firebase'
-import { AuthUser, LoginCredentials, SignupCredentials, UserRole } from '../types'
+import { AuthUser, LoginCredentials, SignupCredentials } from '../types'
 
 interface AuthContextType {
   currentUser: AuthUser | null

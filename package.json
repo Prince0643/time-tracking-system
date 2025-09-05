@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A Clockify-like time tracking application",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -1,238 +1,92 @@
-import { useState, useEffect } from 'react'
-import { Plus, Clock, Filter, Download, Edit, Trash2 } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { 
+  Clock, 
+  Calendar, 
+  DollarSign,
+  BarChart3,
+  Target,
+  Zap
+} from 'lucide-react'
 import TimeTracker from '../components/TimeTracker'
-import { formatDuration, formatDate, formatTime, formatCurrency, calculateEarnings } from '../utils'
-import { TimeEntry, Project, Task, Tag } from '../types'
-import { useAuth } from '../contexts/AuthContext'
+import { TimeSummary, TimeEntry } from '../types'
 import { timeEntryService } from '../services/timeEntryService'
-import { projectService } from '../services/projectService'
-import { taskService } from '../services/projectService'
-import { tagService } from '../services/tagService'
+import { useAuth } from '../contexts/AuthContext'
+import { formatTimeFromSeconds, formatDate } from '../utils'
 
 export default function TimeTrackerPage() {
   const { currentUser } = useAuth()
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [filterProject, setFilterProject] = useState<string>('')
-  const [filterDate, setFilterDate] = useState<string>('')
+  const [timeSummary, setTimeSummary] = useState<TimeSummary | null>(null)
+  const [recentEntries, setRecentEntries] = useState<TimeEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'month'>('today')
 
-  // Load data on component mount and refresh periodically
   useEffect(() => {
-    if (currentUser) {
-      loadData()
-      
-      // Refresh data every 30 seconds to keep stats current
-      const refreshInterval = setInterval(() => {
-        loadData()
-      }, 30000)
-      
-      return () => clearInterval(refreshInterval)
-    }
-  }, [currentUser])
+    loadTimeData()
+  }, [])
 
-  const loadData = async () => {
+  const loadTimeData = async () => {
+    if (!currentUser) return
+    
     setLoading(true)
     try {
-      const [timeEntriesData, projectsData, tasksData, tagsData] = await Promise.all([
-        timeEntryService.getTimeEntries(currentUser!.uid),
-        projectService.getProjects(),
-        taskService.getTasks(),
-        tagService.getTags()
+      const [summary, entries] = await Promise.all([
+        timeEntryService.getTimeSummary(currentUser.uid),
+        timeEntryService.getTimeEntries(currentUser.uid)
       ])
-      
-      console.log('Loaded time entries:', timeEntriesData)
-      console.log('Loaded projects:', projectsData)
-      console.log('Loaded tasks:', tasksData)
-      console.log('Loaded tags:', tagsData)
-      
-      setTimeEntries(timeEntriesData)
-      setProjects(projectsData)
-      setTasks(tasksData)
-      setTags(tagsData)
+      setTimeSummary(summary)
+      setRecentEntries(entries.slice(0, 10)) // Show last 10 entries
     } catch (error) {
-      console.error('Error loading data:', error)
+      console.error('Error loading time data:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleTimeEntrySave = async (entry: Partial<TimeEntry>) => {
-    console.log('handleTimeEntrySave called with:', entry)
-    console.log('Current user:', currentUser)
+  const handleTimeUpdate = (summary: TimeSummary) => {
+    setTimeSummary(summary)
+    loadTimeData() // Refresh recent entries
+  }
+
+  const getTimeStats = () => {
+    if (!timeSummary) return { total: 0, billable: 0, entries: 0 }
     
-    if (!currentUser) {
-      console.error('No current user found')
-      return
-    }
-
-    try {
-      const newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'updatedAt'> = {
-        userId: currentUser.uid,
-        description: entry.description || '',
-        projectId: entry.projectId,
-        taskId: entry.taskId,
-        startTime: entry.startTime || new Date(),
-        endTime: entry.endTime || new Date(),
-        duration: entry.duration || 0,
-        isBillable: entry.isBillable || false,
-        tags: entry.tags || [],
-      }
-      
-      console.log('Prepared new entry:', newEntry)
-      
-      const entryId = await timeEntryService.createTimeEntry(newEntry)
-      console.log('Time entry created with ID:', entryId)
-      
-      await loadData() // Reload data to get the new entry
-      setShowAddForm(false)
-    } catch (error) {
-      console.error('Error saving time entry:', error)
+    switch (activeTab) {
+      case 'today':
+        return timeSummary.today
+      case 'week':
+        return timeSummary.thisWeek
+      case 'month':
+        return timeSummary.thisMonth
+      default:
+        return timeSummary.today
     }
   }
 
-  const handleDeleteTimeEntry = async (entryId: string) => {
-    if (window.confirm('Are you sure you want to delete this time entry?')) {
-      try {
-        await timeEntryService.deleteTimeEntry(entryId)
-        await loadData()
-      } catch (error) {
-        console.error('Error deleting time entry:', error)
-      }
+  const getTabLabel = (tab: 'today' | 'week' | 'month') => {
+    switch (tab) {
+      case 'today':
+        return 'Today'
+      case 'week':
+        return 'This Week'
+      case 'month':
+        return 'This Month'
     }
   }
 
-  const filteredEntries = timeEntries.filter((entry: TimeEntry) => {
-    if (filterProject && entry.projectId !== filterProject) return false
-    if (filterDate) {
-      const entryDate = entry.startTime.toISOString().split('T')[0]
-      if (entryDate !== filterDate) return false
+  const getTabIcon = (tab: 'today' | 'week' | 'month') => {
+    switch (tab) {
+      case 'today':
+        return Clock
+      case 'week':
+        return Calendar
+      case 'month':
+        return BarChart3
     }
-    return true
-  })
-
-  // State for real-time time calculations
-  const [currentTime, setCurrentTime] = useState(new Date())
-  
-  // Update current time every second to keep calculations fresh
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    
-    return () => clearInterval(interval)
-  }, [])
-  
-  // Calculate different time periods (reactive to currentTime)
-  const today = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate())
-  const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() - today.getDay()) // Start of week (Sunday)
-  
-  // Get current running timer duration from localStorage if exists
-  const getCurrentTimerDuration = () => {
-    try {
-      const savedState = localStorage.getItem('timeTrackerState')
-      if (savedState) {
-        const parsedState = JSON.parse(savedState)
-        if (parsedState.isRunning && parsedState.startTime) {
-          const startTime = new Date(parsedState.startTime)
-          const now = new Date()
-          const duration = Math.floor((now.getTime() - startTime.getTime()) / 1000)
-          return duration
-        }
-      }
-    } catch (error) {
-      console.error('Error parsing timer state:', error)
-    }
-    return 0
-  }
-  
-  const currentTimerDuration = getCurrentTimerDuration()
-  
-  // Debug logging for date filtering
-  console.log('Current time:', currentTime)
-  console.log('Today boundary:', today)
-  console.log('Week start boundary:', weekStart)
-  console.log('Time entries:', timeEntries.map(entry => ({
-    id: entry.id,
-    startTime: entry.startTime,
-    startTimeType: typeof entry.startTime,
-    startTimeIsDate: entry.startTime instanceof Date,
-    startTimeValue: entry.startTime?.toString(),
-    startTimeJSON: JSON.stringify(entry.startTime),
-    duration: entry.duration
-  })))
-  
-  const dailyTotalTime = timeEntries
-    .filter((entry: TimeEntry) => {
-      // Handle both Date objects and ISO strings from Firebase
-      let entryDate: Date
-      if (entry.startTime instanceof Date) {
-        entryDate = entry.startTime
-      } else {
-        entryDate = new Date(entry.startTime)
-      }
-      
-      // Check if the date is valid - if not, assume it's from today
-      if (isNaN(entryDate.getTime())) {
-        console.warn(`Invalid date for entry ${entry.id}:`, entry.startTime, '- Assuming today')
-        // For now, include entries with invalid dates in today's total
-        // This will help us see the actual time being tracked
-        return true
-      }
-      
-      const entryDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate())
-      const isToday = entryDay.getTime() === today.getTime()
-      console.log(`Entry ${entry.id}: startTime=${entry.startTime}, entryDate=${entryDate}, entryDay=${entryDay}, today=${today}, isToday=${isToday}`)
-      return isToday
-    })
-    .reduce((sum: number, entry: TimeEntry) => sum + entry.duration, 0)
-  
-  const weeklyTotalTime = timeEntries
-    .filter((entry: TimeEntry) => {
-      // Handle both Date objects and ISO strings from Firebase
-      let entryDate: Date
-      if (entry.startTime instanceof Date) {
-        entryDate = entry.startTime
-      } else {
-        entryDate = new Date(entry.startTime)
-      }
-      
-      // Check if the date is valid - if not, assume it's from this week
-      if (isNaN(entryDate.getTime())) {
-        console.warn(`Invalid date for entry ${entry.id}:`, entry.startTime, '- Assuming this week')
-        // For now, include entries with invalid dates in this week's total
-        // This will help us see the actual time being tracked
-        return true
-      }
-      
-      const entryDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate())
-      const isThisWeek = entryDay >= weekStart && entryDay <= today
-      console.log(`Entry ${entry.id}: startTime=${entry.startTime}, entryDate=${entryDate}, entryDay=${entryDay}, weekStart=${weekStart}, today=${today}, isThisWeek=${isThisWeek}`)
-      return isThisWeek
-    })
-    .reduce((sum: number, entry: TimeEntry) => sum + entry.duration, 0)
-  
-  console.log('Daily total time:', dailyTotalTime)
-  console.log('Weekly total time:', weeklyTotalTime)
-  
-  const totalDuration = timeEntries.reduce((sum: number, entry: TimeEntry) => sum + entry.duration, 0)
-
-  const getProjectName = (projectId?: string) => {
-    return projects.find(p => p.id === projectId)?.name || 'No Project'
   }
 
-  const getTaskName = (taskId?: string) => {
-    return tasks.find(t => t.id === taskId)?.name || 'No Task'
-  }
-
-  const getTagNames = (tagIds: string[] | undefined) => {
-    if (!tagIds || !Array.isArray(tagIds)) return []
-    return tagIds.map(id => tags.find(t => t.id === id)?.name).filter(Boolean)
+  const calculateEarnings = (seconds: number, hourlyRate: number = 25) => {
+    const hours = seconds / 3600
+    return hours * hourlyRate
   }
 
   if (loading) {
@@ -240,11 +94,13 @@ export default function TimeTrackerPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading time entries...</p>
+          <p className="text-gray-600">Loading time tracker...</p>
         </div>
       </div>
     )
   }
+
+  const stats = getTimeStats()
 
   return (
     <div className="p-6 space-y-6">
@@ -252,251 +108,195 @@ export default function TimeTrackerPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Time Tracker</h1>
-          <p className="text-gray-600">Track and manage your time entries</p>
-        </div>
-        
-                 <div className="flex space-x-3">
-          
-          <button
-            onClick={async () => {
-              try {
-                const isConnected = await timeEntryService.testConnection()
-                if (isConnected) {
-                  alert('✅ Firebase connection successful!')
-                } else {
-                  alert('❌ Firebase connection failed. Check console for details.')
-                }
-              } catch (error) {
-                console.error('Connection test error:', error)
-                alert(`❌ Connection test error: ${error}`)
-              }
-            }}
-            className="btn-secondary flex items-center space-x-2"
-          >
-            <span>Test DB Connection</span>
-          </button>
-          
-          <button
-            onClick={async () => {
-              if (!currentUser) {
-                alert('❌ No user logged in')
-                return
-              }
-              
-                             try {
-                 const testEntry = {
-                   userId: currentUser.uid,
-                   description: 'Test entry - ' + new Date().toLocaleTimeString(),
-                   projectId: undefined,
-                   taskId: undefined,
-                   startTime: new Date(),
-                   endTime: new Date(),
-                   duration: 60,
-                   isBillable: false,
-                   tags: [],
-                 }
-                
-                console.log('Creating test entry:', testEntry)
-                const entryId = await timeEntryService.createTimeEntry(testEntry)
-                alert(`✅ Test entry created with ID: ${entryId}`)
-                await loadData() // Reload to show the new entry
-              } catch (error) {
-                console.error('Error creating test entry:', error)
-                alert(`❌ Error creating test entry: ${error}`)
-              }
-            }}
-            className="btn-secondary flex items-center space-x-2"
-          >
-            <span>Create Test Entry</span>
-          </button>
+          <p className="text-gray-600">Track your time and monitor productivity</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Filters:</span>
+      {/* Time Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Daily Time */}
+        <div 
+          className={`card cursor-pointer transition-all duration-200 ${
+            activeTab === 'today' ? 'ring-2 ring-primary-500 bg-primary-50' : 'hover:shadow-md'
+          }`}
+          onClick={() => setActiveTab('today')}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Today</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTimeFromSeconds(timeSummary?.today.total || 0)}
+              </p>
+              <p className="text-sm text-gray-500">
+                {timeSummary?.today.entries || 0} entries
+              </p>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Clock className="h-6 w-6 text-blue-600" />
+            </div>
           </div>
-          
-          <select
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            className="input max-w-xs"
-          >
-            <option value="">All Projects</option>
-            {projects.map((project: Project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="input max-w-xs"
-          />
-          
-          <button
-            onClick={() => {
-              setFilterProject('')
-              setFilterDate('')
-            }}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            Clear
-          </button>
+        </div>
+
+        {/* Weekly Time */}
+        <div 
+          className={`card cursor-pointer transition-all duration-200 ${
+            activeTab === 'week' ? 'ring-2 ring-primary-500 bg-primary-50' : 'hover:shadow-md'
+          }`}
+          onClick={() => setActiveTab('week')}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">This Week</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTimeFromSeconds(timeSummary?.thisWeek.total || 0)}
+              </p>
+              <p className="text-sm text-gray-500">
+                {timeSummary?.thisWeek.entries || 0} entries
+              </p>
+            </div>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <Calendar className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly Time */}
+        <div 
+          className={`card cursor-pointer transition-all duration-200 ${
+            activeTab === 'month' ? 'ring-2 ring-primary-500 bg-primary-50' : 'hover:shadow-md'
+          }`}
+          onClick={() => setActiveTab('month')}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">This Month</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {formatTimeFromSeconds(timeSummary?.thisMonth.total || 0)}
+              </p>
+              <p className="text-sm text-gray-500">
+                {timeSummary?.thisMonth.entries || 0} entries
+              </p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <BarChart3 className="h-6 w-6 text-purple-600" />
+            </div>
+          </div>
         </div>
       </div>
 
-             {/* Summary Stats */}
-       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-         <div className="card text-center">
-           <div className="p-4 bg-blue-100 rounded-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-             <Clock className="h-8 w-8 text-blue-600" />
-           </div>
-           <h3 className="text-lg font-semibold text-gray-900 mb-2">Daily Time</h3>
-           <p className="text-3xl font-bold text-blue-600">{formatDuration(dailyTotalTime)}</p>
-         </div>
-
-         <div className="card text-center">
-           <div className="p-4 bg-green-100 rounded-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-             <Clock className="h-8 w-8 text-green-600" />
-           </div>
-           <h3 className="text-lg font-semibold text-gray-900 mb-2">Weekly Time</h3>
-           <p className="text-3xl font-bold text-green-600">{formatDuration(weeklyTotalTime)}</p>
-         </div>
-
-         <div className="card text-center">
-           <div className="p-4 bg-purple-100 rounded-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-             <Clock className="h-8 w-8 text-purple-600" />
-           </div>
-           <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Time</h3>
-           <p className="text-3xl font-bold text-purple-600">{formatDuration(totalDuration)}</p>
-         </div>
-
-         <div className="card text-center">
-           <div className="p-4 bg-orange-100 rounded-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-             <Clock className="h-8 w-8 text-orange-600" />
-           </div>
-           <h3 className="text-lg font-semibold text-gray-900 mb-2">Entries</h3>
-           <p className="text-3xl font-bold text-orange-600">{timeEntries.length}</p>
-         </div>
-
-         <div className="card text-center">
-           <div className="p-4 bg-red-100 rounded-lg w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-             <Clock className="h-8 w-8 text-red-600" />
-           </div>
-           <h3 className="text-lg font-semibold text-gray-900 mb-2">Current Timer</h3>
-           <p className="text-3xl font-bold text-red-600">{formatDuration(currentTimerDuration)}</p>
-         </div>
-       </div>
-
-      {/* Time Tracker Component */}
-      <div className="mb-8">
-        <TimeTracker 
-          onTimeEntrySave={handleTimeEntrySave}
-          projects={projects}
-          tasks={tasks}
-          tags={tags}
-        />
-      </div>
-
-      {/* Time Entries List */}
+      {/* Active Tab Stats */}
       <div className="card">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Time Entries</h2>
-          
-          <div className="flex items-center space-x-3">
-            <span className="text-sm text-gray-500">
-              {filteredEntries.length} entries
-            </span>
-            <button className="btn-secondary flex items-center space-x-2">
-              <Download className="h-4 w-4" />
-              <span>Export</span>
-            </button>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {getTabLabel(activeTab)} Overview
+          </h2>
+          <div className="flex items-center space-x-2">
+            {React.createElement(getTabIcon(activeTab), {
+              className: "h-5 w-5 text-primary-600"
+            })}
           </div>
         </div>
 
-        <div className="space-y-4">
-          {filteredEntries.length === 0 ? (
-            <div className="text-center py-12">
-              <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No time entries found</h3>
-              <p className="text-gray-500">Start tracking your time to see entries here.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Total Time */}
+          <div className="text-center">
+            <div className="p-4 bg-primary-100 rounded-lg w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+              <Clock className="h-8 w-8 text-primary-600" />
             </div>
-          ) : (
-            filteredEntries.map((entry) => {
-              console.log('Processing entry:', entry)
-              const project = projects.find((p: Project) => p.id === entry.projectId)
-              const task = tasks.find((t: Task) => t.id === entry.taskId)
-              const tagNames = getTagNames(entry.tags)
-              console.log('Entry tags:', entry.tags, 'Tag names:', tagNames)
-              
-              return (
-                <div key={entry.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center space-x-4 flex-1">
-                    {project && (
-                      <div 
-                        className="w-4 h-4 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: project.color }}
-                      />
+            <p className="text-2xl font-bold text-gray-900">
+              {formatTimeFromSeconds(stats.total)}
+            </p>
+            <p className="text-sm text-gray-600">Total Time</p>
+          </div>
+
+          {/* Billable Time */}
+          <div className="text-center">
+            <div className="p-4 bg-green-100 rounded-lg w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+              <DollarSign className="h-8 w-8 text-green-600" />
+            </div>
+            <p className="text-2xl font-bold text-gray-900">
+              {formatTimeFromSeconds(stats.billable)}
+            </p>
+            <p className="text-sm text-gray-600">Billable Time</p>
+            <p className="text-xs text-green-600 font-medium">
+              ${calculateEarnings(stats.billable).toFixed(2)} earned
+            </p>
+          </div>
+
+          {/* Entries Count */}
+          <div className="text-center">
+            <div className="p-4 bg-purple-100 rounded-lg w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+              <Target className="h-8 w-8 text-purple-600" />
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{stats.entries}</p>
+            <p className="text-sm text-gray-600">Time Entries</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Time Tracker Component */}
+      <TimeTracker onTimeUpdate={handleTimeUpdate} />
+
+      {/* Recent Entries */}
+      {recentEntries.length > 0 && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Entries</h2>
+          <div className="space-y-3">
+            {recentEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
+                    {entry.isRunning ? (
+                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    ) : (
+                      <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
                     )}
-                    
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{entry.description || 'No description'}</p>
-                      
-                      <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
-                        {project && <span>{project.name}</span>}
-                        {task && <span>• {task.name}</span>}
-                        <span>• {formatDate(entry.startTime)}</span>
-                        {entry.endTime && <span>• {formatTime(entry.startTime)} - {formatTime(entry.endTime)}</span>}
-                        {entry.isBillable && (
-                          <span className="flex items-center space-x-1 text-green-600">
-                            <span>• Billable</span>
-                          </span>
-                        )}
-                      </div>
-                      
-                      {tagNames.length > 0 && (
-                        <div className="flex items-center space-x-2 mt-2">
-                          {tagNames.map((tagName, index) => (
-                            <span
-                              key={index}
-                              className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded-full"
-                            >
-                              {tagName}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {entry.projectName || 'No project'}
+                    </span>
                   </div>
-                  
-                  <div className="text-right ml-4">
-                    <p className="font-mono font-medium text-gray-900 text-lg">
-                      {formatDuration(entry.duration || 0)}
-                    </p>
-                    {entry.isBillable && (
-                      <p className="text-sm text-green-600">
-                        {formatCurrency(calculateEarnings(entry.duration || 0, 75))}
-                      </p>
-                    )}
-                    <button
-                      onClick={() => handleDeleteTimeEntry(entry.id)}
-                      className="mt-2 text-red-600 hover:text-red-800 p-1 rounded"
-                      title="Delete entry"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                  {entry.description && (
+                    <span className="text-sm text-gray-600 truncate max-w-xs">
+                      {entry.description}
+                    </span>
+                  )}
                 </div>
-              )
-            })
-          )}
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm font-mono text-gray-900">
+                    {formatTimeFromSeconds(entry.duration)}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {formatDate(entry.startTime)}
+                  </span>
+                  {entry.isBillable && (
+                    <DollarSign className="h-4 w-4 text-green-500" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Tips */}
+      <div className="card bg-gradient-to-r from-primary-50 to-blue-50 border-primary-200">
+        <div className="flex items-start space-x-3">
+          <div className="p-2 bg-primary-100 rounded-lg">
+            <Zap className="h-5 w-5 text-primary-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">Quick Tips</h3>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Start a timer before beginning any task</li>
+              <li>• Add descriptions to remember what you worked on</li>
+              <li>• Use tags to categorize your work</li>
+              <li>• Mark billable time to track earnings</li>
+              <li>• Review your time patterns weekly for better productivity</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

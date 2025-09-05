@@ -1,351 +1,411 @@
-import { useState, useEffect } from 'react'
-import { Play, Square, Plus, Clock, Tag, DollarSign } from 'lucide-react'
-import { formatDuration, calculateDuration } from '../utils'
-import { Project, Task, Tag as TagType, TimeEntry } from '../types'
+import { useState, useEffect, useRef } from 'react'
+import { Play, Square, Clock, DollarSign, Tag, FileText } from 'lucide-react'
+import { TimeEntry, CreateTimeEntryData, Project } from '../types'
+import { timeEntryService } from '../services/timeEntryService'
+import { projectService } from '../services/projectService'
+import { useAuth } from '../contexts/AuthContext'
+import { formatDateTime } from '../utils'
 
 interface TimeTrackerProps {
-  onTimeEntrySave: (entry: Partial<TimeEntry>) => void
-  projects: Project[]
-  tasks: Task[]
-  tags: TagType[]
+  onTimeUpdate?: (timeSummary: any) => void
 }
 
-export default function TimeTracker({ onTimeEntrySave, projects, tasks, tags }: TimeTrackerProps) {
+export default function TimeTracker({ onTimeUpdate }: TimeTrackerProps) {
+  const { currentUser } = useAuth()
   const [isRunning, setIsRunning] = useState(false)
-  const [startTime, setStartTime] = useState<Date | null>(null)
-  const [description, setDescription] = useState('')
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [isBillable, setIsBillable] = useState(true)
-  const [duration, setDuration] = useState(0)
-  const [showError, setShowError] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [formData, setFormData] = useState<CreateTimeEntryData>({
+    projectId: '',
+    description: '',
+    isBillable: false,
+    tags: []
+  })
+  const [newTag, setNewTag] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const startTimeRef = useRef<Date | null>(null)
 
-  // Load timer state from localStorage on component mount
   useEffect(() => {
-    const savedState = localStorage.getItem('timeTrackerState')
-    if (savedState) {
-      try {
-        const parsedState = JSON.parse(savedState)
-        if (parsedState.isRunning && parsedState.startTime) {
-          // Check if the saved timer is still valid (not older than 24 hours)
-          const savedStartTime = new Date(parsedState.startTime)
-          const now = new Date()
-          const hoursDiff = (now.getTime() - savedStartTime.getTime()) / (1000 * 60 * 60)
-          
-          if (hoursDiff < 24) {
-            setIsRunning(true)
-            setStartTime(savedStartTime)
-            setDescription(parsedState.description || '')
-            setSelectedProject(parsedState.selectedProject || null)
-            setSelectedTask(parsedState.selectedTask || null)
-            setSelectedTags(parsedState.selectedTags || [])
-            setIsBillable(parsedState.isBillable !== undefined ? parsedState.isBillable : true)
-            console.log('Timer state restored from localStorage')
-          } else {
-            console.log('Saved timer state is too old, clearing localStorage')
-            localStorage.removeItem('timeTrackerState')
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing saved timer state:', error)
-        localStorage.removeItem('timeTrackerState')
-      }
-    }
+    loadInitialData()
+    loadRunningEntry()
   }, [])
 
-  // Save timer state to localStorage whenever it changes
   useEffect(() => {
-    const stateToSave = {
-      isRunning,
-      startTime: startTime?.toISOString(),
-      description,
-      selectedProject,
-      selectedTask,
-      selectedTags,
-      isBillable
-    }
-    localStorage.setItem('timeTrackerState', JSON.stringify(stateToSave))
-  }, [isRunning, startTime, description, selectedProject, selectedTask, selectedTags, isBillable])
-
-  // Update duration every second when timer is running
-  useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isRunning && startTime) {
-      interval = setInterval(() => {
-        setDuration(calculateDuration(startTime))
+    if (isRunning && startTimeRef.current) {
+      intervalRef.current = setInterval(() => {
+        const now = new Date()
+        const elapsed = Math.floor((now.getTime() - startTimeRef.current!.getTime()) / 1000)
+        setElapsedTime(Math.max(0, elapsed)) // Ensure non-negative
       }, 1000)
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
     }
-    return () => clearInterval(interval)
-  }, [isRunning, startTime])
 
-  const handleStart = () => {
-    const now = new Date()
-    setStartTime(now)
-    setIsRunning(true)
-    setDuration(0)
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [isRunning])
+
+  const loadInitialData = async () => {
+    if (!currentUser) return
+    
+    try {
+      const projectsData = await projectService.getProjects()
+      setProjects(projectsData)
+    } catch (error) {
+      console.error('Error loading projects:', error)
+    }
   }
 
-  const handleStop = () => {
-    console.log('handleStop called')
-    console.log('startTime:', startTime)
-    console.log('description:', description)
-    console.log('isRunning:', isRunning)
+  const loadRunningEntry = async () => {
+    if (!currentUser) return
+    
+    try {
+      const runningEntry = await timeEntryService.getRunningTimeEntry(currentUser.uid)
+      if (runningEntry) {
+        // If projectName is missing but projectId exists, try to get it from projects
+        if (!runningEntry.projectName && runningEntry.projectId) {
+          const project = projects.find(p => p.id === runningEntry.projectId)
+          if (project) {
+            runningEntry.projectName = project.name
+          }
+        }
+        
+        setCurrentEntry(runningEntry)
+        setIsRunning(true)
+        const startTime = new Date(runningEntry.startTime)
+        startTimeRef.current = startTime
+        const now = new Date()
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
+        setElapsedTime(Math.max(0, elapsed)) // Ensure non-negative
+      }
+    } catch (error) {
+      console.error('Error loading running entry:', error)
+    }
+  }
+
+  const startTimer = async () => {
+    if (!currentUser) return
     
     // Validate required fields
-    if (!description.trim()) {
-      setErrorMessage('Please enter a description of what you are working on')
-      setShowError(true)
-      // Hide error after 3 seconds
-      setTimeout(() => setShowError(false), 3000)
+    if (!formData.projectId) {
+      setError('Please select a project')
       return
     }
     
-    if (!startTime) {
-      setErrorMessage('Timer was not started properly')
-      setShowError(true)
-      setTimeout(() => setShowError(false), 3000)
+    if (!formData.description || !formData.description.trim()) {
+      setError('Please enter a description')
       return
     }
     
-    // Clear any previous errors
-    setShowError(false)
-    setErrorMessage('')
+    setLoading(true)
+    setError('')
     
-    setIsRunning(false)
-    
-    const entry: Partial<TimeEntry> = {
-      description: description.trim(),
-      projectId: selectedProject?.id,
-      taskId: selectedTask?.id,
-      startTime,
-      endTime: new Date(),
-      duration: calculateDuration(startTime),
-      isBillable,
-      tags: selectedTags,
+    try {
+      // Get the project name before creating the entry
+      const selectedProject = projects.find(p => p.id === formData.projectId)
+      const projectName = selectedProject?.name
+      
+      const entryId = await timeEntryService.createTimeEntry(formData, currentUser.uid, projectName)
+      const newEntry: TimeEntry = {
+        id: entryId,
+        userId: currentUser.uid,
+        projectId: formData.projectId,
+        projectName: projectName,
+        description: formData.description,
+        startTime: new Date(),
+        duration: 0,
+        isRunning: true,
+        isBillable: formData.isBillable || false,
+        tags: formData.tags,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      
+      setCurrentEntry(newEntry)
+      setIsRunning(true)
+      startTimeRef.current = new Date()
+      setElapsedTime(0)
+      
+      // Reset form for next entry
+      setFormData({
+        projectId: '',
+        description: '',
+        isBillable: false,
+        tags: []
+      })
+      
+      if (onTimeUpdate) {
+        const summary = await timeEntryService.getTimeSummary(currentUser.uid)
+        onTimeUpdate(summary)
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to start timer')
+    } finally {
+      setLoading(false)
     }
-    
-    console.log('Saving time entry:', entry)
-    onTimeEntrySave(entry)
-    
-    // Reset form
-    setDescription('')
-    setSelectedProject(null)
-    setSelectedTask(null)
-    setSelectedTags([])
-    setIsBillable(true)
-    setStartTime(null)
-    setDuration(0)
-    
-    // Clear localStorage since timer is stopped
-    localStorage.removeItem('timeTrackerState')
   }
 
-  const filteredTasks = selectedProject 
-    ? tasks.filter(task => task.projectId === selectedProject.id)
-    : []
+  const stopTimer = async () => {
+    if (!currentEntry) return
+    
+    setLoading(true)
+    setError('')
+    
+    try {
+      await timeEntryService.stopTimeEntry(currentEntry.id)
+      setIsRunning(false)
+      setCurrentEntry(null)
+      setElapsedTime(0)
+      startTimeRef.current = null
+      
+      if (onTimeUpdate) {
+        const summary = await timeEntryService.getTimeSummary(currentUser!.uid)
+        onTimeUpdate(summary)
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to stop timer')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const toggleTag = (tagId: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tagId) 
-        ? prev.filter(id => id !== tagId)
-        : [...prev, tagId]
-    )
+  const formatElapsedTime = (seconds: number): string => {
+    // Handle NaN, undefined, or negative values
+    if (!seconds || isNaN(seconds) || seconds < 0) {
+      return '00:00:00'
+    }
+    
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = Math.floor(seconds % 60)
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const addTag = () => {
+    if (newTag.trim() && !formData.tags?.includes(newTag.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...(prev.tags || []), newTag.trim()]
+      }))
+      setNewTag('')
+    }
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags?.filter(tag => tag !== tagToRemove) || []
+    }))
+  }
+
+  const getProjectName = (projectId?: string) => {
+    if (!projectId) return 'No project'
+    const project = projects.find(p => p.id === projectId)
+    return project?.name || 'Unknown project'
   }
 
   return (
-    <div className="card max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Time Tracker</h1>
-        <p className="text-gray-600">Track your time and boost productivity</p>
-      </div>
+    <div className="space-y-6">
+      {/* Error Message */}
+      {error && (
+        <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <Clock className="h-5 w-5 text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
 
       {/* Timer Display */}
-      <div className="text-center mb-8">
-        <div className="text-6xl font-mono font-bold text-primary-600 mb-4">
-          {formatDuration(duration)}
+      <div className="card text-center">
+        <div className="mb-6">
+          <div className="text-6xl font-mono font-bold text-primary-600 mb-2">
+            {formatElapsedTime(elapsedTime)}
+          </div>
+          <p className="text-gray-600">
+            {isRunning ? 'Timer is running...' : 'Ready to track time'}
+          </p>
         </div>
-        
+
+        {/* Timer Controls */}
         <div className="flex justify-center space-x-4">
           {!isRunning ? (
             <button
-              onClick={handleStart}
-              className="btn-primary flex items-center space-x-2 px-8 py-3 text-lg"
+              onClick={startTimer}
+              disabled={loading || !formData.projectId || !formData.description || !formData.description.trim()}
+              className="btn-primary flex items-center space-x-2 px-8 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="h-5 w-5" />
-              <span>Start</span>
+              <span>Start Timer</span>
             </button>
           ) : (
-            <>
-              <button
-                onClick={handleStop}
-                className="btn-danger flex items-center space-x-2 px-8 py-3 text-lg"
-              >
-                <Square className="h-5 w-5" />
-                <span>Stop</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to reset the timer? This will clear all current progress.')) {
-                    setIsRunning(false)
-                    setStartTime(null)
-                    setDuration(0)
-                    setDescription('')
-                    setSelectedProject(null)
-                    setSelectedTask(null)
-                    setSelectedTags([])
-                    setIsBillable(true)
-                    localStorage.removeItem('timeTrackerState')
-                  }
-                }}
-                className="btn-secondary flex items-center space-x-2 px-6 py-3 text-lg"
-              >
-                <span>Reset</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Time Entry Form */}
-      <div className="space-y-6">
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            What are you working on? <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value)
-              // Clear error when user starts typing
-              if (showError) {
-                setShowError(false)
-                setErrorMessage('')
-              }
-            }}
-            placeholder="Enter a description..."
-            className={`input text-lg ${showError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-            required
-          />
-          {showError && (
-            <p className="mt-2 text-sm text-red-600 flex items-center">
-              <span className="mr-1">⚠️</span>
-              {errorMessage}
-            </p>
-          )}
-        </div>
-
-        {/* Project Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Project
-          </label>
-          <select
-            value={selectedProject?.id || ''}
-            onChange={(e) => {
-              const project = projects.find(p => p.id === e.target.value)
-              setSelectedProject(project || null)
-              setSelectedTask(null) // Reset task when project changes
-            }}
-            className="input"
-          >
-            <option value="">No project</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Task Selection */}
-        {selectedProject && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Task
-            </label>
-            <select
-              value={selectedTask?.id || ''}
-              onChange={(e) => {
-                const task = filteredTasks.find(t => t.id === e.target.value)
-                setSelectedTask(task || null)
-              }}
-              className="input"
+            <button
+              onClick={stopTimer}
+              disabled={loading}
+              className="btn-danger flex items-center space-x-2 px-8 py-3 text-lg"
             >
-              <option value="">No task</option>
-              {filteredTasks.map(task => (
-                <option key={task.id} value={task.id}>
-                  {task.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Tags */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tags
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {tags.map(tag => (
-              <button
-                key={tag.id}
-                onClick={() => toggleTag(tag.id)}
-                className={`
-                  px-3 py-1 rounded-full text-sm font-medium transition-colors
-                  ${selectedTags.includes(tag.id)
-                    ? 'bg-primary-100 text-primary-700 border border-primary-300'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }
-                `}
-              >
-                {tag.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Billable Toggle */}
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="billable"
-            checked={isBillable}
-            onChange={(e) => setIsBillable(e.target.checked)}
-            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-          />
-          <label htmlFor="billable" className="text-sm font-medium text-gray-700">
-            Billable
-          </label>
-          <DollarSign className="h-4 w-4 text-gray-400" />
+              <Square className="h-5 w-5" />
+              <span>Stop Timer</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Current Session Info */}
-      {isRunning && startTime && (
-        <div className="mt-8 p-4 bg-primary-50 rounded-lg border border-primary-200">
-          <div className="flex items-center space-x-2 text-primary-700 mb-2">
-            <Clock className="h-4 w-4" />
-            <span className="font-medium">Current Session</span>
-            {localStorage.getItem('timeTrackerState') && (
-              <span className="text-xs bg-primary-200 text-primary-800 px-2 py-1 rounded-full">
-                Restored
+      {/* Current Entry Info */}
+      {currentEntry && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Entry</h3>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <FileText className="h-4 w-4 text-gray-500" />
+              <span className="text-sm text-gray-600">
+                <strong>Project:</strong> {getProjectName(currentEntry.projectId)}
               </span>
+            </div>
+            {currentEntry.description && (
+              <div className="flex items-center space-x-2">
+                <FileText className="h-4 w-4 text-gray-500" />
+                <span className="text-sm text-gray-600">
+                  <strong>Description:</strong> {currentEntry.description}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center space-x-2">
+              <Clock className="h-4 w-4 text-gray-500" />
+              <span className="text-sm text-gray-600">
+                <strong>Started:</strong> {currentEntry.startTime ? formatDateTime(currentEntry.startTime) : '--'}
+              </span>
+            </div>
+            {currentEntry.isBillable && (
+              <div className="flex items-center space-x-2">
+                <DollarSign className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-green-600 font-medium">Billable</span>
+              </div>
+            )}
+            {currentEntry.tags && currentEntry.tags.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Tag className="h-4 w-4 text-gray-500" />
+                <div className="flex flex-wrap gap-1">
+                  {currentEntry.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-primary-100 text-primary-700 text-xs rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-          <div className="text-sm text-primary-600">
-            <p>Started at: {startTime.toLocaleTimeString()}</p>
-            {selectedProject && <p>Project: {selectedProject.name}</p>}
-            {selectedTask && <p>Task: {selectedTask.name}</p>}
-            {!description.trim() && (
-              <p className="text-amber-600 font-medium mt-2">
-                ⚠️ Please enter a description before stopping the timer
-              </p>
-            )}
+        </div>
+      )}
+
+      {/* Timer Setup Form */}
+      {!isRunning && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Timer Setup</h3>
+          <div className="space-y-4">
+            {/* Project Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Project <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.projectId || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, projectId: e.target.value || undefined }))}
+                className="input"
+                required
+              >
+                <option value="">Select a project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.description || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value || undefined }))}
+                className="input"
+                placeholder="What are you working on?"
+                required
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags (Optional)
+              </label>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  className="input flex-1"
+                  placeholder="Add a tag"
+                  onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                />
+                <button
+                  type="button"
+                  onClick={addTag}
+                  className="btn-secondary"
+                >
+                  Add
+                </button>
+              </div>
+              {formData.tags && formData.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center space-x-1 px-2 py-1 bg-primary-100 text-primary-700 text-sm rounded-full"
+                    >
+                      <span>{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="hover:text-primary-900"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Billable Toggle */}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isBillable"
+                checked={formData.isBillable || false}
+                onChange={(e) => setFormData(prev => ({ ...prev, isBillable: e.target.checked }))}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isBillable" className="text-sm font-medium text-gray-700">
+                This is billable time
+              </label>
+            </div>
           </div>
         </div>
       )}

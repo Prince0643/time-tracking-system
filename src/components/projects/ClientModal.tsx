@@ -1,96 +1,70 @@
 import React, { useState, useEffect } from 'react'
-import { X, User, Mail, Phone, MapPin } from 'lucide-react'
-import { Client } from '../../types'
+import { X, Mail, Phone, Building, MapPin, AlertCircle } from 'lucide-react'
+import { Client, CreateClientData } from '../../types'
+import { projectService } from '../../services/projectService'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface ClientModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (client: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   client?: Client | null
-  mode: 'create' | 'edit'
+  onSuccess: () => void
 }
 
-export default function ClientModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  client, 
-  mode 
-}: ClientModalProps) {
-  const [formData, setFormData] = useState({
+export default function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalProps) {
+  const { currentUser } = useAuth()
+  const [formData, setFormData] = useState<CreateClientData>({
     name: '',
     email: '',
     phone: '',
+    company: '',
     address: ''
   })
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [error, setError] = useState('')
+
+  const isEdit = !!client
 
   useEffect(() => {
-    if (client && mode === 'edit') {
-      setFormData({
-        name: client.name,
-        email: client.email || '',
-        phone: client.phone || '',
-        address: client.address || ''
-      })
-    } else {
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        address: ''
-      })
+    if (isOpen) {
+      if (client) {
+        setFormData({
+          name: client.name,
+          email: client.email || '',
+          phone: client.phone || '',
+          company: client.company || '',
+          address: client.address || ''
+        })
+      } else {
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          company: '',
+          address: ''
+        })
+      }
+      setError('')
     }
-    setErrors({})
-  }, [client, mode])
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Client name is required'
-    }
-
-    if (formData.name.length > 100) {
-      newErrors.name = 'Client name must be less than 100 characters'
-    }
-
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address'
-    }
-
-    if (formData.phone && formData.phone.length > 20) {
-      newErrors.phone = 'Phone number must be less than 20 characters'
-    }
-
-    if (formData.address && formData.address.length > 200) {
-      newErrors.address = 'Address must be less than 200 characters'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  }, [isOpen, client])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!validateForm()) {
-      return
-    }
+    if (!currentUser) return
 
     setLoading(true)
+    setError('')
+
     try {
-      await onSave({
-        name: formData.name.trim(),
-        email: formData.email.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
-        address: formData.address.trim() || undefined,
-        isArchived: false
-      })
+      if (isEdit) {
+        await projectService.updateClient(client.id, formData)
+      } else {
+        await projectService.createClient(formData, currentUser.uid)
+      }
+      onSuccess()
       onClose()
-    } catch (error) {
-      console.error('Error saving client:', error)
+    } catch (error: any) {
+      setError(error.message || 'Failed to save client')
     } finally {
       setLoading(false)
     }
@@ -102,63 +76,78 @@ export default function ClientModal({
       ...prev,
       [name]: value
     }))
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }))
-    }
   }
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {mode === 'create' ? 'Add New Client' : 'Edit Client'}
+            {isEdit ? 'Edit Client' : 'Add New Client'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Error Message */}
+          {error && (
+            <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Client Name */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Client Name *
             </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              className="input"
+              placeholder="Enter client name"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          {/* Company */}
+          <div>
+            <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-2">
+              Company
+            </label>
             <div className="relative">
               <input
                 type="text"
-                id="name"
-                name="name"
-                value={formData.name}
+                id="company"
+                name="company"
+                value={formData.company}
                 onChange={handleInputChange}
-                className={`input pl-10 ${errors.name ? 'border-red-500' : ''}`}
-                placeholder="Enter client name"
+                className="input pl-10"
+                placeholder="Enter company name"
                 disabled={loading}
               />
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
           </div>
 
           {/* Email */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+              Email
             </label>
             <div className="relative">
               <input
@@ -167,21 +156,18 @@ export default function ClientModal({
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className={`input pl-10 ${errors.email ? 'border-red-500' : ''}`}
+                className="input pl-10"
                 placeholder="Enter email address"
                 disabled={loading}
               />
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-            )}
           </div>
 
           {/* Phone */}
           <div>
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-              Phone Number
+              Phone
             </label>
             <div className="relative">
               <input
@@ -190,15 +176,12 @@ export default function ClientModal({
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
-                className={`input pl-10 ${errors.phone ? 'border-red-500' : ''}`}
+                className="input pl-10"
                 placeholder="Enter phone number"
                 disabled={loading}
               />
-              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
-            {errors.phone && (
-              <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
-            )}
           </div>
 
           {/* Address */}
@@ -212,34 +195,31 @@ export default function ClientModal({
                 name="address"
                 value={formData.address}
                 onChange={handleInputChange}
+                className="input pl-10"
                 rows={3}
-                className={`input pl-10 ${errors.address ? 'border-red-500' : ''}`}
                 placeholder="Enter address"
                 disabled={loading}
               />
-              <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             </div>
-            {errors.address && (
-              <p className="mt-1 text-sm text-red-600">{errors.address}</p>
-            )}
           </div>
 
           {/* Actions */}
-          <div className="flex space-x-3 pt-4">
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 btn-secondary"
+              className="btn-secondary"
               disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 btn-primary"
+              className="btn-primary"
               disabled={loading}
             >
-              {loading ? 'Saving...' : mode === 'create' ? 'Add Client' : 'Save Changes'}
+              {loading ? 'Saving...' : (isEdit ? 'Update Client' : 'Add Client')}
             </button>
           </div>
         </form>

@@ -5,11 +5,10 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import Dashboard from './pages/Dashboard'
-import TimeTracker from './pages/TimeTracker'
 import Projects from './pages/Projects'
+import TimeTracker from './pages/TimeTracker'
 import Reports from './pages/Reports'
-import AdminDashboard from './pages/AdminDashboard'
-import Settings from './pages/Settings'
+import TaskManagement from './pages/ProjectManagement'
 import Auth from './pages/Auth'
 
 function AppContent() {
@@ -50,14 +49,25 @@ function AppContent() {
                 <Reports />
               </ProtectedRoute>
             } />
+            <Route path="/management" element={
+              <ProtectedRoute>
+                <TaskManagement />
+              </ProtectedRoute>
+            } />
             <Route path="/admin" element={
               <ProtectedRoute>
-                <AdminDashboard />
+                <div className="p-6">
+                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Dashboard</h1>
+                  <p className="text-gray-600">Admin functionality will be implemented here.</p>
+                </div>
               </ProtectedRoute>
             } />
             <Route path="/settings" element={
               <ProtectedRoute>
-                <Settings />
+                <div className="p-6">
+                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Settings</h1>
+                  <p className="text-gray-600">Settings functionality will be implemented here.</p>
+                </div>
               </ProtectedRoute>
             } />
             <Route path="/auth" element={<Navigate to="/" replace />} />

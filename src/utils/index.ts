@@ -1,29 +1,4 @@
-import { format, formatDistance, formatRelative, isValid } from 'date-fns'
-
-export const formatDuration = (seconds: number): string => {
-  if (seconds < 0) return '0:00:00'
-  
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`
-}
-
-export const formatDurationShort = (seconds: number): string => {
-  if (seconds < 0) return '0m'
-  
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`
-  }
-  return `${minutes}m`
-}
+import { format, isValid, formatDistance } from 'date-fns'
 
 export const formatTime = (date: Date): string => {
   if (!isValid(date)) return '--:--'
@@ -40,25 +15,35 @@ export const formatDateTime = (date: Date): string => {
   return format(date, 'MMM dd, yyyy HH:mm')
 }
 
+export const formatTimeFromSeconds = (seconds: number): string => {
+  // Handle NaN, undefined, or negative values
+  if (!seconds || isNaN(seconds) || seconds < 0) {
+    return '00:00:00'
+  }
+  
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+export const formatTimeFromSecondsPrecise = (seconds: number): string => {
+  // Handle NaN, undefined, or negative values
+  if (!seconds || isNaN(seconds) || seconds < 0) {
+    return '00:00:00'
+  }
+  
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.round(seconds % 60 * 100) / 100 // Round to 2 decimal places
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
 export const formatRelativeTime = (date: Date): string => {
   if (!isValid(date)) return '--'
-  return formatRelative(date, new Date())
-}
-
-export const formatDistanceTime = (date: Date): string => {
-  if (!isValid(date)) return '--'
   return formatDistance(date, new Date(), { addSuffix: true })
-}
-
-export const calculateDuration = (startTime: Date, endTime?: Date): number => {
-  if (!endTime) {
-    return Math.floor((Date.now() - startTime.getTime()) / 1000)
-  }
-  return Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
-}
-
-export const generateId = (): string => {
-  return Math.random().toString(36).substr(2, 9)
 }
 
 export const formatCurrency = (amount: number, currency: string = 'USD'): string => {
@@ -68,8 +53,8 @@ export const formatCurrency = (amount: number, currency: string = 'USD'): string
   }).format(amount)
 }
 
-export const calculateEarnings = (duration: number, hourlyRate: number): number => {
-  return (duration / 3600) * hourlyRate
+export const generateId = (): string => {
+  return Math.random().toString(36).substr(2, 9)
 }
 
 export const cn = (...classes: (string | undefined | null | false)[]): string => {
