@@ -1,5 +1,16 @@
 import { format, isValid, formatDistance } from 'date-fns'
 
+// TODO: Admin can view the team tasks and projects
+// add a team task, like task management is for each team
+// per task is the details, comments, activity, etc
+// can view per user is the only tasks assigned to them
+// if the user exited the tab while the time is runnning, it should still count the time
+// research on click up website
+// change colors for the ui in task management
+// if user wants to absent, file a report
+// sign in using email
+
+
 export const formatTime = (date: Date): string => {
   if (!isValid(date)) return '--:--'
   return format(date, 'HH:mm')
