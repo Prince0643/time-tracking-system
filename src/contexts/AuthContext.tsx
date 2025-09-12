@@ -53,6 +53,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: credentials.name,
         email: credentials.email,
         role: credentials.role,
+        teamId: null,
+        teamRole: null,
         timezone: 'America/New_York',
         hourlyRate: credentials.role === 'admin' ? 0 : 25, // Default rates
         isActive: true,
@@ -67,7 +69,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         uid: user.uid,
         email: credentials.email,
         role: credentials.role,
-        name: credentials.name
+        name: credentials.name,
+        teamId: null,
+        teamRole: null
       })
     } catch (error) {
       console.error('Error during signup:', error)
@@ -95,7 +99,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           uid: user.uid,
           email: userData.email,
           role: userData.role,
-          name: userData.name
+          name: userData.name,
+          teamId: userData.teamId || null,
+          teamRole: userData.teamRole || null
         })
       } else {
         throw new Error('User profile not found')
@@ -130,7 +136,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               uid: user.uid,
               email: userData.email,
               role: userData.role,
-              name: userData.name
+              name: userData.name,
+              teamId: userData.teamId || null,
+              teamRole: userData.teamRole || null
             })
           }
         } catch (error) {

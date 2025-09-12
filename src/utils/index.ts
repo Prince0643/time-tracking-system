@@ -3,7 +3,7 @@ import { format, isValid, formatDistance } from 'date-fns'
 // TODO: Admin can view the team tasks and projects
 // add a team task, like task management is for each team
 // per task is the details, comments, activity, etc
-// can view per user is the only tasks assigned to them
+// user can only see their own tasks
 // if the user exited the tab while the time is runnning, it should still count the time
 // research on click up website
 // change colors for the ui in task management
@@ -50,6 +50,49 @@ export const formatTimeFromSecondsPrecise = (seconds: number): string => {
   const secs = Math.round(seconds % 60 * 100) / 100 // Round to 2 decimal places
   
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// Convert decimal hours to HH:mm:ss format
+export const formatHoursToHHMMSS = (hours: number): string => {
+  if (!hours || isNaN(hours) || hours < 0) {
+    return '00:00:00'
+  }
+  
+  const totalSeconds = Math.round(hours * 3600)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+// Convert seconds to HH:mm:ss format (for time entries stored in seconds)
+export const formatSecondsToHHMMSS = (seconds: number): string => {
+  if (!seconds || isNaN(seconds) || seconds < 0) {
+    return '00:00:00'
+  }
+  
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+// Smart formatter that detects if input is hours or seconds
+export const formatDurationToHHMMSS = (duration: number): string => {
+  if (!duration || isNaN(duration) || duration < 0) {
+    return '00:00:00'
+  }
+  
+  // Based on the database, durations are stored in seconds
+  // If duration is very large (> 10000), it might be milliseconds, so convert to seconds
+  // Otherwise, treat as seconds
+  if (duration > 10000) {
+    return formatSecondsToHHMMSS(duration / 1000)
+  } else {
+    return formatSecondsToHHMMSS(duration)
+  }
 }
 
 export const formatRelativeTime = (date: Date): string => {

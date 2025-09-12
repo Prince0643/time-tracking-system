@@ -9,6 +9,8 @@ import Projects from './pages/Projects'
 import TimeTracker from './pages/TimeTracker'
 import Reports from './pages/Reports'
 import TaskManagement from './pages/ProjectManagement'
+import Teams from './pages/Teams'
+import AdminDashboard from './pages/AdminDashboard'
 import Auth from './pages/Auth'
 
 function AppContent() {
@@ -54,12 +56,14 @@ function AppContent() {
                 <TaskManagement />
               </ProtectedRoute>
             } />
+            <Route path="/teams" element={
+              <ProtectedRoute>
+                <Teams />
+              </ProtectedRoute>
+            } />
             <Route path="/admin" element={
               <ProtectedRoute>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Dashboard</h1>
-                  <p className="text-gray-600">Admin functionality will be implemented here.</p>
-                </div>
+                <AdminDashboard />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={

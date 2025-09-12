@@ -22,7 +22,7 @@ export default function TaskManagement() {
     try {
       setLoading(true)
       const [tasksData, statusesData, prioritiesData] = await Promise.all([
-        taskService.getTasks(),
+        taskService.getTasks(undefined, currentUser?.uid), // Only get current user's tasks
         taskService.getTaskStatuses(),
         taskService.getTaskPriorities()
       ])

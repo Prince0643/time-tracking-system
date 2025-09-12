@@ -1,10 +1,13 @@
 export type UserRole = 'employee' | 'admin'
+export type TeamRole = 'member' | 'leader'
 
 export interface User {
   id: string
   name: string
   email: string
   role: UserRole
+  teamId?: string | null
+  teamRole?: TeamRole | null
   avatar?: string
   timezone: string
   hourlyRate?: number
@@ -18,6 +21,8 @@ export interface AuthUser {
   email: string
   role: UserRole
   name: string
+  teamId?: string | null
+  teamRole?: TeamRole | null
 }
 
 export interface LoginCredentials {
@@ -405,4 +410,62 @@ export interface ProjectTemplate {
   createdBy: string
   createdAt: Date
   usageCount: number
+}
+
+// Team Management Types
+export interface Team {
+  id: string
+  name: string
+  description?: string
+  leaderId: string
+  leaderName: string
+  leaderEmail: string
+  color: string
+  isActive: boolean
+  memberCount: number
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface TeamMember {
+  id: string
+  teamId: string
+  userId: string
+  userName: string
+  userEmail: string
+  teamRole: TeamRole
+  joinedAt: Date
+  isActive: boolean
+}
+
+export interface CreateTeamData {
+  name: string
+  description?: string
+  leaderId: string
+  color: string
+}
+
+export interface UpdateTeamData {
+  name?: string
+  description?: string
+  leaderId?: string
+  color?: string
+  isActive?: boolean
+}
+
+export interface AddTeamMemberData {
+  userId: string
+  role: TeamRole
+}
+
+export interface TeamStats {
+  totalMembers: number
+  activeMembers: number
+  totalTasks: number
+  completedTasks: number
+  inProgressTasks: number
+  overdueTasks: number
+  totalTimeLogged: number
+  averageTaskCompletion: number
 }

@@ -49,7 +49,16 @@ export default function SignupForm({ onSwitchToLogin }: SignupFormProps) {
     try {
       await signup(credentials)
     } catch (error: any) {
-      setError(error.message || 'Failed to create account. Please try again.')
+      // Handle specific Firebase auth errors
+      if (error.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please sign in instead or use a different email address.')
+      } else if (error.code === 'auth/weak-password') {
+        setError('Password is too weak. Please choose a stronger password.')
+      } else if (error.code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.')
+      } else {
+        setError(error.message || 'Failed to create account. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -276,9 +285,20 @@ export default function SignupForm({ onSwitchToLogin }: SignupFormProps) {
 
         {/* Error Message */}
         {error && (
-          <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-red-700">{error}</p>
+              {error.includes('already registered') && (
+                <button
+                  type="button"
+                  onClick={onSwitchToLogin}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium mt-1 underline"
+                >
+                  Sign in instead
+                </button>
+              )}
+            </div>
           </div>
         )}
 

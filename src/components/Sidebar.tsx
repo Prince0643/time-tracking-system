@@ -6,7 +6,8 @@ import {
   Settings, 
   X,
   Users,
-  Kanban
+  Kanban,
+  UserCheck
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -24,6 +25,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
     { name: 'Time Tracker', href: '/tracker', icon: Clock },
     { name: 'Projects', href: '/projects', icon: FolderOpen },
     { name: 'Task Management', href: '/management', icon: Kanban },
+    { name: 'Teams', href: '/teams', icon: UserCheck },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     // Admin-only navigation items
     ...(currentUser?.role === 'admin' ? [

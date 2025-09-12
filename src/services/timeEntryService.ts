@@ -51,6 +51,27 @@ export const timeEntryService = {
     return []
   },
 
+  // Get all time entries (for admin use)
+  async getAllTimeEntries(): Promise<TimeEntry[]> {
+    const entriesRef = ref(database, 'timeEntries')
+    const snapshot = await get(entriesRef)
+    
+    if (snapshot.exists()) {
+      const entries = snapshot.val()
+      return Object.values(entries)
+        .map((entry: any) => ({
+          ...entry,
+          startTime: new Date(entry.startTime),
+          endTime: entry.endTime ? new Date(entry.endTime) : undefined,
+          createdAt: new Date(entry.createdAt),
+          updatedAt: new Date(entry.updatedAt)
+        }))
+        .sort((a: TimeEntry, b: TimeEntry) => b.createdAt.getTime() - a.createdAt.getTime())
+    }
+    
+    return []
+  },
+
   // Get time entries for a specific date range
   async getTimeEntriesByDateRange(userId: string, startDate: Date, endDate: Date): Promise<TimeEntry[]> {
     const entriesRef = ref(database, 'timeEntries')
