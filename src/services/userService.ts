@@ -83,5 +83,14 @@ export const userService = {
       teamRole,
       updatedAt: new Date().toISOString()
     })
+  },
+
+  // Update user information
+  async updateUser(userId: string, updates: Partial<Pick<User, 'name' | 'email' | 'role' | 'isActive'>>): Promise<void> {
+    const userRef = ref(database, `users/${userId}`)
+    await update(userRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    })
   }
 }

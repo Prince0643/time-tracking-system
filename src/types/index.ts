@@ -469,3 +469,53 @@ export interface TeamStats {
   totalTimeLogged: number
   averageTaskCompletion: number
 }
+
+// Messaging Types
+export interface Message {
+  id: string
+  teamId: string
+  senderId: string
+  senderName: string
+  senderEmail: string
+  content: string
+  timestamp: Date
+  type: 'text' | 'system' | 'file'
+  isEdited: boolean
+  editedAt?: Date
+  replyTo?: string
+  attachments?: MessageAttachment[]
+  reactions?: MessageReaction[]
+}
+
+export interface MessageAttachment {
+  id: string
+  name: string
+  url: string
+  type: string
+  size: number
+  uploadedAt: Date
+}
+
+export interface MessageReaction {
+  emoji: string
+  userId: string
+  userName: string
+  timestamp: Date
+}
+
+export interface TeamChat {
+  teamId: string
+  teamName: string
+  lastMessage?: Message
+  unreadCount: number
+  isActive: boolean
+  members: string[]
+}
+
+export interface CreateMessageData {
+  teamId: string
+  content: string
+  type?: 'text' | 'system' | 'file'
+  replyTo?: string
+  attachments?: Omit<MessageAttachment, 'id' | 'uploadedAt'>[]
+}

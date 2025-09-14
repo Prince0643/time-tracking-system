@@ -9,6 +9,7 @@ import {
 import { ref, set, get } from 'firebase/database'
 import { auth, database } from '../config/firebase'
 import { AuthUser, LoginCredentials, SignupCredentials } from '../types'
+import { loggingService } from '../services/loggingService'
 
 interface AuthContextType {
   currentUser: AuthUser | null
@@ -73,8 +74,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         teamId: null,
         teamRole: null
       })
+      
+      // Log successful signup
+      await loggingService.logAuthEvent('signup', user.uid, credentials.name, true)
     } catch (error) {
       console.error('Error during signup:', error)
+      // Log failed signup attempt
+      await loggingService.logAuthEvent('signup', credentials.email, 'Unknown', false, { error: error.message })
       throw error
     }
   }
@@ -103,19 +109,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
           teamId: userData.teamId || null,
           teamRole: userData.teamRole || null
         })
+        
+        // Log successful login
+        await loggingService.logAuthEvent('login', user.uid, userData.name, true)
       } else {
         throw new Error('User profile not found')
       }
     } catch (error) {
       console.error('Error during login:', error)
+      // Log failed login attempt
+      await loggingService.logAuthEvent('login', credentials.email, 'Unknown', false, { error: error.message })
       throw error
     }
   }
 
   async function logout() {
     try {
+      const userId = currentUser?.uid
+      const userName = currentUser?.name
+      
       await signOut(auth)
       setCurrentUser(null)
+      
+      // Log successful logout
+      if (userId && userName) {
+        await loggingService.logAuthEvent('logout', userId, userName, true)
+      }
     } catch (error) {
       console.error('Error during logout:', error)
       throw error

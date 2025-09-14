@@ -1,18 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Users, 
   Clock, 
   TrendingUp, 
-  Calendar, 
   Search, 
-  Filter, 
   Eye, 
   Edit, 
   Trash2, 
   UserPlus,
   BarChart3,
-  PieChart,
-  Activity
+  Activity,
+  X
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { userService } from '../services/userService'
@@ -21,6 +19,7 @@ import { projectService } from '../services/projectService'
 import { User, TimeEntry, Project } from '../types'
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isValid } from 'date-fns'
 import UserDetailsModal from '../components/admin/UserDetailsModal'
+import UserEditModal from '../components/admin/UserEditModal'
 import { formatDurationToHHMMSS } from '../utils'
 
 export default function AdminDashboard() {
@@ -35,6 +34,9 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'time-entries'>('overview')
   const [selectedUserForDetails, setSelectedUserForDetails] = useState<User | null>(null)
   const [isUserDetailsModalOpen, setIsUserDetailsModalOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (currentUser?.role === 'admin') {
@@ -55,8 +57,8 @@ export default function AdminDashboard() {
       
       // Filter out time entries with invalid dates
       const validTimeEntries = timeEntriesData.filter(entry => {
-        // Use createdAt as the date field since that's what exists in the data
-        const dateField = entry.date || entry.createdAt
+        // Use startTime as the date field since that's what exists in the data
+        const dateField = entry.startTime || entry.createdAt
         if (!dateField) return false
         try {
           // Handle both string and Date object formats
@@ -93,17 +95,16 @@ export default function AdminDashboard() {
 
     // Filter by user
     if (selectedUser) {
-      filtered = filtered.filter(entry => entry.userId === selectedUser)
+      filtered = filtered.filter((entry: TimeEntry) => entry.userId === selectedUser)
     }
-
     // Filter by date range
     const now = new Date()
     switch (dateFilter) {
       case 'week':
         const weekStart = startOfWeek(now)
         const weekEnd = endOfWeek(now)
-        filtered = filtered.filter(entry => {
-          const dateField = entry.date || entry.createdAt
+        filtered = filtered.filter((entry: TimeEntry) => {
+          const dateField = entry.startTime || entry.createdAt
           if (!dateField) return false
           const entryDate = typeof dateField === 'string' ? parseISO(dateField) : new Date(dateField)
           return isValid(entryDate) && entryDate >= weekStart && entryDate <= weekEnd
@@ -112,8 +113,8 @@ export default function AdminDashboard() {
       case 'month':
         const monthStart = startOfMonth(now)
         const monthEnd = endOfMonth(now)
-        filtered = filtered.filter(entry => {
-          const dateField = entry.date || entry.createdAt
+        filtered = filtered.filter((entry: TimeEntry) => {
+          const dateField = entry.startTime || entry.createdAt
           if (!dateField) return false
           const entryDate = typeof dateField === 'string' ? parseISO(dateField) : new Date(dateField)
           return isValid(entryDate) && entryDate >= monthStart && entryDate <= monthEnd
@@ -134,18 +135,18 @@ export default function AdminDashboard() {
   }
 
   const getTotalHours = () => {
-    return getFilteredTimeEntries().reduce((total, entry) => total + entry.duration, 0)
+    return getFilteredTimeEntries().reduce((total: number, entry: TimeEntry) => total + entry.duration, 0)
   }
 
   const getActiveUsers = () => {
-    const activeUserIds = new Set(getFilteredTimeEntries().map(entry => entry.userId))
+    const activeUserIds = new Set(getFilteredTimeEntries().map((entry: TimeEntry) => entry.userId))
     return users.filter(user => activeUserIds.has(user.id))
   }
 
   const getProjectStats = () => {
     const projectStats = projects.map(project => {
-      const projectEntries = getFilteredTimeEntries().filter(entry => entry.projectId === project.id)
-      const totalHours = projectEntries.reduce((total, entry) => total + entry.duration, 0)
+      const projectEntries = getFilteredTimeEntries().filter((entry: TimeEntry) => entry.projectId === project.id)
+      const totalHours = projectEntries.reduce((total: number, entry: TimeEntry) => total + entry.duration, 0)
       return {
         ...project,
         totalHours,
@@ -158,14 +159,14 @@ export default function AdminDashboard() {
 
   const getUserStats = () => {
     return users.map(user => {
-      const userEntries = getFilteredTimeEntries().filter(entry => entry.userId === user.id)
-      const totalHours = userEntries.reduce((total, entry) => total + entry.duration, 0)
+      const userEntries = getFilteredTimeEntries().filter((entry: TimeEntry) => entry.userId === user.id)
+      const totalHours = userEntries.reduce((total: number, entry: TimeEntry) => total + entry.duration, 0)
       return {
         ...user,
         totalHours,
         entryCount: userEntries.length,
         lastActivity: userEntries.length > 0 ? 
-          Math.max(...userEntries.map(entry => new Date(entry.date).getTime())) : null
+          Math.max(...userEntries.map((entry: TimeEntry) => new Date(entry.startTime).getTime())) : null
       }
     }).sort((a, b) => b.totalHours - a.totalHours)
   }
@@ -173,6 +174,53 @@ export default function AdminDashboard() {
   const handleViewUser = (user: User) => {
     setSelectedUserForDetails(user)
     setIsUserDetailsModalOpen(true)
+  }
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setIsEditModalOpen(true)
+  }
+
+  const handleDeleteUser = async (user: User) => {
+    if (window.confirm(`Are you sure you want to delete "${user.name}"? This action cannot be undone.`)) {
+      try {
+        setError('')
+        // Note: In a real application, you would need to implement user deletion
+        // For now, we'll just show a message since user deletion is complex
+        // (involves removing from auth, database, and all related data)
+        alert('User deletion is not implemented yet. This would require removing the user from Firebase Auth and all related data.')
+        console.log('Would delete user:', user.id)
+      } catch (error) {
+        setError('Failed to delete user')
+        console.error('Error deleting user:', error)
+      }
+    }
+  }
+
+  const handleUserUpdate = async (updatedUser: User) => {
+    try {
+      setError('')
+      // Update user in the database
+      await userService.updateUser(updatedUser.id, {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        isActive: updatedUser.isActive
+      })
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === updatedUser.id ? updatedUser : user
+        )
+      )
+      
+      setIsEditModalOpen(false)
+      setEditingUser(null)
+    } catch (error) {
+      setError('Failed to update user')
+      console.error('Error updating user:', error)
+    }
   }
 
   if (currentUser?.role !== 'admin') {
@@ -296,7 +344,7 @@ export default function AdminDashboard() {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  {userStats.slice(0, 5).map((user, index) => (
+                  {userStats.slice(0, 5).map((user) => (
                     <div key={user.id} className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="flex-shrink-0">
@@ -399,9 +447,9 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {getFilteredUsers().map((user) => {
-                      const userEntries = timeEntries.filter(entry => entry.userId === user.id)
-                      const lastActivity = userEntries.length > 0 ? 
-                        Math.max(...userEntries.map(entry => new Date(entry.date).getTime())) : null
+                      const userEntries = timeEntries.filter((entry: TimeEntry) => entry.userId === user.id)
+        const lastActivity = userEntries.length > 0 ? 
+          Math.max(...userEntries.map((entry: TimeEntry) => new Date(entry.startTime).getTime())) : null
                       
                       return (
                         <tr key={user.id} className="hover:bg-gray-50">
@@ -462,10 +510,18 @@ export default function AdminDashboard() {
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
-                              <button className="text-indigo-600 hover:text-indigo-900">
+                              <button 
+                                onClick={() => handleEditUser(user)}
+                                className="text-indigo-600 hover:text-indigo-900"
+                                title="Edit user"
+                              >
                                 <Edit className="h-4 w-4" />
                               </button>
-                              <button className="text-red-600 hover:text-red-900">
+                              <button 
+                                onClick={() => handleDeleteUser(user)}
+                                className="text-red-600 hover:text-red-900"
+                                title="Delete user"
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -543,7 +599,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {getFilteredTimeEntries().map((entry) => {
+                    {getFilteredTimeEntries().map((entry: TimeEntry) => {
                       const user = users.find(u => u.id === entry.userId)
                       const project = projects.find(p => p.id === entry.projectId)
                       
@@ -568,7 +624,7 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {(() => {
-                              const dateField = entry.date || entry.createdAt
+                              const dateField = entry.startTime || entry.createdAt
                               if (!dateField) return 'No Date'
                               try {
                                 const date = typeof dateField === 'string' ? parseISO(dateField) : new Date(dateField)
@@ -602,6 +658,29 @@ export default function AdminDashboard() {
           allTimeEntries={timeEntries}
           allProjects={projects}
         />
+
+        {/* User Edit Modal */}
+        <UserEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={handleUserUpdate}
+          user={editingUser}
+        />
+
+        {/* Error Message */}
+        {error && (
+          <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg z-50">
+            <div className="flex items-center space-x-2">
+              <span>{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="text-red-500 hover:text-red-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

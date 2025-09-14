@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { SearchProvider } from './contexts/SearchContext'
+import { NotificationProvider } from './contexts/NotificationContext'
+import { MessagingProvider } from './contexts/MessagingContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
@@ -11,7 +14,9 @@ import Reports from './pages/Reports'
 import TaskManagement from './pages/ProjectManagement'
 import Teams from './pages/Teams'
 import AdminDashboard from './pages/AdminDashboard'
+import Settings from './pages/Settings'
 import Auth from './pages/Auth'
+import MessagingWidget from './components/messaging/MessagingWidget'
 
 function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -68,10 +73,7 @@ function AppContent() {
             } />
             <Route path="/settings" element={
               <ProtectedRoute>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Settings</h1>
-                  <p className="text-gray-600">Settings functionality will be implemented here.</p>
-                </div>
+                <Settings />
               </ProtectedRoute>
             } />
             <Route path="/auth" element={<Navigate to="/" replace />} />
@@ -79,6 +81,9 @@ function AppContent() {
           </Routes>
         </main>
       </div>
+      
+      {/* Global Messaging Widget */}
+      <MessagingWidget />
     </div>
   )
 }
@@ -86,9 +91,15 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <SearchProvider>
+        <NotificationProvider>
+          <MessagingProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </MessagingProvider>
+        </NotificationProvider>
+      </SearchProvider>
     </AuthProvider>
   )
 }

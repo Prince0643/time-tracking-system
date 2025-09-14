@@ -1,10 +1,31 @@
 import { Clock, TrendingUp, Play, Plus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotificationService } from '../services/notificationService'
+import { useEffect } from 'react'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser } = useAuth()
+  const { addInfoNotification, addSuccessNotification } = useNotificationService()
+
+  // Add sample notifications on first visit
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem('hasSeenWelcome')
+    if (!hasSeenWelcome) {
+      addInfoNotification(
+        'Welcome to Clockistry!',
+        'Start tracking your time by creating a new time entry.',
+        '/tracker'
+      )
+      addSuccessNotification(
+        'System Ready',
+        'Your time tracking application is now fully functional.',
+        '/tracker'
+      )
+      localStorage.setItem('hasSeenWelcome', 'true')
+    }
+  }, [addInfoNotification, addSuccessNotification])
 
   return (
     <div className="p-6 space-y-6">
